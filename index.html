@@ -47,7 +47,7 @@ header p{margin:4px 0 0;color:var(--muted);font-size:15px;line-height:20px}
 /* settings = inset grouped list */
 .settings{background:var(--panel);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
 .field,.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:6px 16px;font-size:17px;color:var(--fg);position:relative}
-.field+.field::before,.field+.switch::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--line)}
+.field+.field::before,.field+.switch::before,.switch+.switch::before{content:"";position:absolute;top:0;left:16px;right:0;border-top:.5px solid var(--line)}
 .field select,.field input{font:400 17px var(--body);color:var(--room);background:transparent;border:0;text-align:right;padding:6px 0;min-width:0;-webkit-appearance:none;appearance:none}
 .field select{background:none;padding-right:0}
 .field input[type=number]{width:72px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
@@ -103,6 +103,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,.track:focus-visib
 .answer p{margin:0;max-width:46ch;font-size:15px;line-height:20px;color:var(--muted)}
 .answer p b{color:var(--fg)}
 .alert{background:var(--bad-soft);color:var(--bad);border-radius:12px;padding:12px 14px;font-size:15px;font-weight:600}
+.limitnote{display:grid;gap:6px;font-size:15px;line-height:20px}
+.limitnote div{border-radius:12px;padding:10px 14px;background:var(--room-soft);color:var(--fg)}
+.limitnote div.over{background:var(--bad-soft);color:var(--bad)}
+.limitnote b{font-weight:700}
+.limitnote .sub{display:block;font-size:13px;color:var(--muted)}
+.limitnote .over .sub{color:inherit;opacity:.85}
+/* FamilyMart locked: bars show the roster, no knob */
+.lockk .cell.k .handle{display:none}
+.lockk .cell.k .track{cursor:default}
 .chartbox{overflow-x:auto;background:var(--bg);border-radius:12px;padding:4px}
 svg text{font-family:var(--num);font-variant-numeric:tabular-nums}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
@@ -205,18 +214,25 @@ td.strong{font-weight:700;color:var(--room)}
         <span class="knob" aria-hidden="true"></span>
         <span>Stop bars at the limit <small id="lockNote"></small></span>
       </label>
+      <label class="switch" for="lockK">
+        <input id="lockK" type="checkbox" checked>
+        <span class="knob" aria-hidden="true"></span>
+        <span>Lock FamilyMart <small>(roster hours, not draggable)</small></span>
+      </label>
     </div>
   </header>
 
   <section aria-labelledby="w0-h">
     <div class="sec-head"><h2 id="w0-h">This week<span class="tag">Roster</span> <small id="r0"></small></h2></div>
     <div class="board" id="b0"></div>
+    <div class="limitnote" id="n0" hidden></div>
     <div class="weeksum" id="s0"></div>
   </section>
 
   <section aria-labelledby="w1-h">
     <div class="sec-head"><h2 id="w1-h">Next week<span class="tag">Roster</span> <small id="r1"></small></h2></div>
     <div class="board" id="b1"></div>
+    <div class="limitnote" id="n1" hidden></div>
     <div class="weeksum" id="s1"></div>
   </section>
 
@@ -237,6 +253,7 @@ td.strong{font-weight:700;color:var(--room)}
     <div class="chartbox"><svg id="chart" viewBox="0 0 700 250" width="100%" role="img" aria-label="Ceiling staircase and FamilyMart running total for the planning week"></svg></div>
     <p class="hint">The blue staircase is the most FamilyMart can have in total by each day. The green line is the running total of shifts you set below. The gap is what is left. Drag a handle up to try a shift.</p>
     <div class="board" id="b2"></div>
+    <div class="limitnote" id="n2" hidden></div>
     <div class="weeksum" id="s2"></div>
     <div class="tablebox">
       <table>
@@ -279,6 +296,7 @@ function headroomRaw(i){
 }
 
 const cells=[];
+let touched=null; // last knob moved, for the "why it stopped" note
 function cell(kind,arr,i){
   const el=document.createElement('div');
   el.className='cell '+kind;
@@ -286,7 +304,7 @@ function cell(kind,arr,i){
   const tr=el.querySelector('.track');
   const set=v=>{
     if(S.lock){const cur=arr[i];v=Math.min(v,Math.max(cur,cur+Math.floor(Math.max(0,headroomRaw(i))/STEP)*STEP));}
-    arr[i]=clamp(Math.round(v/STEP)*STEP,0,MAXH);paint();update();
+    arr[i]=clamp(Math.round(v/STEP)*STEP,0,MAXH);touched={kind,arr,i};paint();update();
   };
   function paint(){
     const p=(arr[i]/MAXH*100)+'%';
@@ -304,14 +322,16 @@ function cell(kind,arr,i){
     el.classList.toggle('atlimit',arr[i]>=mx);
     tr.title='Limit for this day: '+fmt(mx)+'h';
   };
+  const ro=()=>kind==='k'&&S.lockK!==false;
   tr.addEventListener('keydown',e=>{
+    if(ro())return;
     if(e.key==='ArrowUp'){e.preventDefault();set(arr[i]+STEP);}
     if(e.key==='ArrowDown'){e.preventDefault();set(arr[i]-STEP);}
   });
   // press and drag the handle: up adds, down removes; a plain click does nothing
   let dragging=false,y0=0,v0=0;
   const pxPerH=()=>tr.getBoundingClientRect().height/MAXH;
-  tr.addEventListener('pointerdown',e=>{dragging=true;y0=e.clientY;v0=arr[i];tr.setPointerCapture(e.pointerId);});
+  tr.addEventListener('pointerdown',e=>{if(ro())return;dragging=true;y0=e.clientY;v0=arr[i];tr.setPointerCapture(e.pointerId);});
   tr.addEventListener('pointermove',e=>{if(dragging)set(v0+(y0-e.clientY)/pxPerH());});
   const end=()=>{dragging=false;};
   tr.addEventListener('pointerup',end);tr.addEventListener('pointercancel',end);
@@ -351,14 +371,47 @@ function update(){
   const setK=sum(S.k.slice(P)),first=room.findIndex(v=>v>0);
   $('answerText').innerHTML='more FamilyMart hours fit in '+md(P)+' – '+md(P+6)+(setK?', on top of the <b>'+fmt(setK)+'h</b> you set':'')+'. '+(first>0?'Nothing fits before <b>'+DAYS[first]+' '+md(P+first)+'</b>.':'');
   const al=$('alert');
-  if(overDays.length){al.hidden=false;al.textContent='Over '+lim+'h in the 7 days ending '+overDays.map(md).join(', ')+'.';}else al.hidden=true;
+  if(overDays.length){al.hidden=false;al.textContent='Over '+lim+'h: '+overDays.map(e=>md(e-6)+' – '+md(e)+' = '+fmt(win(e,allAt))+'h').join(', ')+'.';}else al.hidden=true;
   $('tbody').innerHTML=DAYS.map((d,i)=>{const e=P+i;const earlier=win(e,allAt)-sum(S.k.slice(P,e+1))-sum(S.h.slice(P,e+1));
     return '<tr><td>'+d+' <span style="color:var(--muted)">'+md(e)+'</span></td><td class="num">'+fmt(earlier)+'h</td><td class="num">'+fmt(S.k[e])+'h</td><td class="num">'+fmt(S.h[e])+'h</td><td class="num strong">'+fmt(room[i])+'h</td></tr>';}).join('');
   let u=0;const used=S.k.slice(P).map(v=>u+=v);
   chart(room,used,overDays.filter(i=>i>=P).map(i=>i-P));
   cells.forEach(c=>c._mark());
+  explain(lim,overDays);
   $('lockNote').textContent='(bars cannot go past '+lim+'h in any 7 days)';
   save();
+}
+
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const dname=i=>WD[dateOf(i).getDay()]+' '+md(i);
+// split of the 7 days ending on day e
+function split(e){const t=win(e,allAt),k=win(e,kAt);return {t,k,h:t-k};}
+// notes under each week: stretches that go over, and why the last moved knob stopped
+function explain(lim,overDays){
+  const notes=[[],[],[]];
+  // back-to-back stretches that are over become one note
+  const groups=[];overDays.forEach(e=>{const g=groups[groups.length-1];if(g&&e===g[g.length-1]+1)g.push(e);else groups.push([e]);});
+  groups.forEach(g=>{
+    const worst=g.reduce((m,e)=>win(e,allAt)>win(m,allAt)?e:m,g[0]),x=split(worst),cut=x.t-lim;
+    const lo=Math.max(0,g[g.length-1]-6),hi=g[0]; // days you can edit that sit inside every one of these stretches
+    const head=g.length===1
+      ?'<b>'+dname(worst-6)+' – '+dname(worst)+'</b> adds up to <b>'+fmt(x.t)+'h</b>, '+fmt(cut)+'h over '+lim+'h.'
+      :'<b>'+g.length+' stretches of 7 days are over '+lim+'h</b>, from '+dname(g[0]-6)+' to '+dname(g[g.length-1])+'. Worst: <b>'+dname(worst-6)+' – '+dname(worst)+' = '+fmt(x.t)+'h</b> ('+fmt(cut)+'h over).';
+    const fix=lo<=hi?'Taking '+fmt(cut)+'h off '+(lo===hi?dname(lo):'one day from '+dname(lo)+' to '+dname(hi))+' fixes '+(g.length===1?'it':'all of them')+'.':'Take '+fmt(cut)+'h off inside the worst stretch, then check again.';
+    notes[Math.floor(g[g.length-1]/7)].push('<div class="over">'+head+'<span class="sub">FamilyMart '+fmt(x.k)+'h + HSTEC '+fmt(x.h)+'h. '+fix+'</span></div>');
+  });
+  if(touched&&!overDays.length){
+    const {kind,arr,i}=touched,mx=Math.max(0,arr[i]+headroomRaw(i));
+    if(arr[i]>0&&arr[i]>=mx){
+      let be=i,best=Infinity;
+      for(let e=i;e<=Math.min(i+6,N-1);e++){const r=lim-win(e,allAt);if(r<best){best=r;be=e;}}
+      const x=split(be);
+      notes[Math.floor(i/7)].push('<div><b>'+dname(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+'</b> stopped at <b>'+fmt(arr[i])+'h</b>: '+
+        '<b>'+dname(be-6)+' – '+dname(be)+'</b> is full at '+lim+'h.'+
+        '<span class="sub">That stretch has FamilyMart '+fmt(x.k)+'h + HSTEC '+fmt(x.h)+'h = '+fmt(x.t)+'h.</span></div>');
+    }
+  }
+  notes.forEach((n,w)=>{const el=$('n'+w);el.innerHTML=n.join('');el.hidden=!n.length;});
 }
 
 function chart(room,used,over){
@@ -387,12 +440,15 @@ function chart(room,used,over){
 }
 
 $('lock').checked=S.lock!==false;
+const applyLockK=()=>{document.body.classList.toggle('lockk',S.lockK!==false);document.querySelectorAll('.cell.k .track').forEach(t=>{t.tabIndex=S.lockK!==false?-1:0;t.setAttribute('aria-readonly',S.lockK!==false);});};
+$('lockK').checked=S.lockK!==false;
+$('lockK').addEventListener('change',()=>{S.lockK=$('lockK').checked;applyLockK();save();});
 $('lock').addEventListener('change',()=>{S.lock=$('lock').checked;update();});
 $('limit').addEventListener('change',update);
 $('cap').addEventListener('input',update);
 $('clearPlan').addEventListener('click',()=>{for(let i=14;i<N;i++){S.k[i]=0;S.h[i]=0;}cells.forEach(c=>c._paint());update();});
-$('resetAll').addEventListener('click',()=>{S.k=[...REAL_K];S.h=zero();build();});
-build();
+$('resetAll').addEventListener('click',()=>{S.k=[...REAL_K];S.h=zero();build();applyLockK();});
+build();applyLockK();
 </script>
 
 </body>
