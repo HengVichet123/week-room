@@ -136,6 +136,52 @@ td.strong{font-weight:700;color:var(--room)}
   .big{font-size:40px}
   section{padding:14px 12px}
 }
+/* desktop (wide screen): sidebar with title and settings, weeks on the right; phone layout above is untouched */
+@media (min-width:1100px){
+  body{font-size:15px}
+  .wrap{max-width:1440px;grid-template-columns:300px minmax(0,1fr);column-gap:32px;row-gap:24px;align-items:start;padding:32px 40px 56px}
+  header{grid-column:1;grid-row:1/span 3;position:sticky;top:32px;padding-top:0;gap:20px}
+  h1{font-size:28px;line-height:34px}
+  header p{font-size:13px;line-height:18px}
+  .settings{border-radius:10px}
+  .field,.switch{font-size:14px;min-height:40px;padding:6px 14px}
+  .field select,.field input{font-size:14px}
+  .switch .knob{width:38px;height:22px}
+  .switch .knob::after{width:18px;height:18px}
+  .switch input:checked+.knob::after{transform:translateX(16px)}
+  .switch small{font-size:12px}
+  section{grid-column:2;border-radius:12px;padding:20px 22px;gap:16px}
+  h2{font-size:19px;line-height:24px}
+  h2 small{font-size:13px}
+  .board{grid-template-columns:96px repeat(7,minmax(0,1fr));gap:8px 10px}
+  .cell .track{width:40px;height:132px;border-radius:10px}
+  .cell .fill{border-radius:10px}
+  .cell .handle{width:24px;height:24px}
+  .cell .track:hover .handle{transform:translate(-50%,50%) scale(1.12)}
+  .cell .track:hover{background:color-mix(in srgb,var(--fill) 80%,var(--ink))}
+  .btn{font-size:13px;min-height:30px;padding:5px 14px}
+  .btn:hover{filter:brightness(.95)}
+  .big{font-size:56px}
+  /* planning: chart and table side by side, sliders below */
+  section.plan{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);column-gap:24px;
+    grid-template-areas:"head head" "answer answer" "alert alert" "legend legend" "chart table" "hint table" "board board" "sum sum"}
+  .plan>.sec-head{grid-area:head} .plan>.answer{grid-area:answer} .plan>.alert{grid-area:alert}
+  .plan>.legend{grid-area:legend} .plan>.chartbox{grid-area:chart} .plan>.hint{grid-area:hint}
+  .plan>.board{grid-area:board} .plan>.weeksum{grid-area:sum} .plan>.tablebox{grid-area:table;align-self:start}
+  table{font-size:13px}
+  th{white-space:normal;vertical-align:bottom;font-size:11px}
+  th,td{padding:8px 10px}
+}
+/* very wide: this week and next week side by side */
+@media (min-width:1560px){
+  .wrap{grid-template-columns:300px minmax(0,1fr) minmax(0,1fr)}
+  header{grid-row:1/span 2}
+  section[aria-labelledby="w0-h"]{grid-column:2;grid-row:1}
+  section[aria-labelledby="w1-h"]{grid-column:3;grid-row:1}
+  section.plan{grid-column:2/-1;grid-row:2}
+  section:not(.plan) .board{grid-template-columns:92px repeat(7,minmax(0,1fr));gap:8px 6px}
+  section:not(.plan) .cell .track{width:34px}
+}
 @media (prefers-reduced-motion:reduce){.cell .fill,.cell .handle,.cell .cap,.switch .knob,.switch .knob::after,.btn{transition:none}}
 </style>
 </head>
