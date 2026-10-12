@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Next Week Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: three stacked weeks on one timeline: this week, next week (real rosters), then the week you plan */
+:root{
+  --bg:#f3f5f2; --panel:#ffffff; --fg:#1d2420; --muted:#66706a; --line:#d9dfda;
+  --konbini:#13896f; --konbini-soft:#d5efe7;
+  --hstec:#c27a12; --hstec-soft:#f6e6c9;
+  --room:#2f5fb3; --room-soft:#dde6f6;
+  --bad:#c23a2c; --bad-soft:#f8dcd8; --today:#2f5fb3;
+  --body:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Sans",sans-serif;
+  --num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121614; --panel:#1b211e; --fg:#e7ece9; --muted:#9aa59f; --line:#2e3833;
+  --konbini:#3cc29f; --konbini-soft:#173a30; --hstec:#e6a240; --hstec-soft:#3d2d12;
+  --room:#7aa2ea; --room-soft:#1d2a44; --bad:#ef7565; --bad-soft:#41201c; --today:#7aa2ea;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121614; --panel:#1b211e; --fg:#e7ece9; --muted:#9aa59f; --line:#2e3833;
+  --konbini:#3cc29f; --konbini-soft:#173a30; --hstec:#e6a240; --hstec-soft:#3d2d12;
+  --room:#7aa2ea; --room-soft:#1d2a44; --bad:#ef7565; --bad-soft:#41201c; --today:#7aa2ea;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between}
+h1{margin:0;font-size:1.6rem;text-wrap:balance}
+header p{margin:2px 0 0;color:var(--muted);font-size:.9rem}
+.settings{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.field{display:grid;gap:2px;font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.field input,.field select{font:500 .95rem var(--num);padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);min-width:0}
+.field input[type=number]{width:84px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px;min-width:0}
+section.plan{border:2px solid var(--room)}
+.sec-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+h2{margin:0;font-size:1.05rem}
+h2 small{font:500 .8rem var(--num);color:var(--muted);margin-left:6px}
+.tag{font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--bg);color:var(--muted);margin-left:8px;vertical-align:2px}
+.plan .tag{background:var(--room-soft);color:var(--room)}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:5px 12px;font-size:.85rem}
+.btn:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,.track:focus-visible{outline:2px solid var(--room);outline-offset:2px}
+.hint{margin:0;color:var(--muted);font-size:.82rem}
+
+/* day board */
+.board{display:grid;grid-template-columns:72px repeat(7,minmax(0,1fr));gap:6px 6px;align-items:end}
+.rowlab{display:flex;align-items:center;align-self:center;font-size:.8rem;font-weight:700}
+.rowlab.k{color:var(--konbini)} .rowlab.h{color:var(--hstec)} .rowlab.t{color:var(--muted);font-weight:500}
+.dayhead{text-align:center;font-size:.75rem;color:var(--muted);line-height:1.2;border-radius:6px;padding:2px 0}
+.dayhead b{display:block;color:var(--fg);font-size:.85rem}
+.dayhead.today{background:var(--room-soft);color:var(--today)}
+.dayhead.today b::after{content:" · today";font-weight:500;font-size:.7rem}
+.cell{display:flex;flex-direction:column;align-items:center;gap:12px;padding-bottom:2px;user-select:none}
+.cell .val{font:700 .95rem var(--num);color:var(--ink);line-height:1}
+.cell .val.zero{color:var(--muted);font-weight:500}
+.cell .track{position:relative;width:min(34px,100%);height:110px;border-radius:6px 6px 3px 3px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);touch-action:none;cursor:ns-resize}
+.cell .fill{position:absolute;inset:auto 0 0 0;background:var(--ink);border-radius:3px;transition:height .08s}
+.cell .handle{position:absolute;left:50%;width:40px;height:16px;transform:translate(-50%,50%);border-radius:99px;background:var(--panel);border:2px solid var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:bottom .08s;display:grid;place-items:center}
+.cell .handle::before{content:"";width:16px;height:4px;border-block:1.5px solid var(--ink);opacity:.7}
+.cell .cap{position:absolute;left:50%;width:52px;height:0;border-top:3px solid var(--bad);transform:translate(-50%,1.5px);pointer-events:none;transition:bottom .08s}
+.cell .cap::after{content:attr(data-h);position:absolute;right:-2px;top:-17px;font:700 .68rem var(--num);color:var(--bad)}
+.cell .cap.top{display:none}
+.cell.atlimit .handle{border-color:var(--bad);background:var(--bad-soft)}
+.cell.atlimit .handle::before{border-color:var(--bad)}
+.cell .track:active .handle{transform:translate(-50%,50%) scale(1.1)}
+.cell.k{--ink:var(--konbini)}
+.cell.h{--ink:var(--hstec)}
+.tot{text-align:center;font:500 .85rem var(--num);color:var(--muted)}
+.tot.bad{color:var(--bad);font-weight:700}
+.weeksum{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.88rem}
+.weeksum b{font-family:var(--num)}
+
+/* answer */
+.answer{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
+.big{font:700 2.6rem/1 var(--num);color:var(--room)}
+.answer p{margin:0;max-width:46ch}
+.alert{background:var(--bad-soft);color:var(--bad);border-radius:7px;padding:8px 12px;font-size:.88rem;font-weight:500}
+.chartbox{overflow-x:auto}
+svg text{font-family:var(--num)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+td.num{font-family:var(--num)}
+td.strong{font-weight:700;color:var(--room)}
+.switch{display:flex;align-items:center;gap:10px;font-size:.92rem;cursor:pointer;justify-self:start}
+.switch small{color:var(--muted)}
+.switch input{position:absolute;opacity:0;width:1px;height:1px}
+.switch .knob{width:40px;height:22px;border-radius:99px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.switch .knob::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);transition:transform .15s}
+.switch input:checked+.knob{background:var(--room)}
+.switch input:checked+.knob::after{transform:translateX(18px)}
+.switch input:focus-visible+.knob{outline:2px solid var(--room);outline-offset:2px}
+@media (max-width:560px){
+  .board{grid-template-columns:repeat(7,minmax(0,1fr))}
+  .rowlab{grid-column:1/-1;padding-top:4px}
+  .board .corner{display:none}
+  .cell .track{height:92px}
+  .cell .val{font-size:.85rem}
+  .big{font-size:2.1rem}
+}
+@media (prefers-reduced-motion:reduce){.cell .fill,.cell .handle,.cell .cap{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Next Week Room</h1>
+      <p>Your real FamilyMart roster for this week and next, then the week you are planning.</p>
+    </div>
+    <div class="settings">
+      <label class="field" for="limit">Limit (any 7 days)
+        <select id="limit"><option value="28">28h · semester</option><option value="40">40h · long break</option></select>
+      </label>
+      <label class="field" for="cap">FamilyMart max / 7 days
+        <input id="cap" type="number" min="0" max="40" step="0.5" value="20">
+      </label>
+    </div>
+  </header>
+
+  <section aria-labelledby="w0-h">
+    <div class="sec-head"><h2 id="w0-h">This week<span class="tag">roster</span> <small id="r0"></small></h2></div>
+    <div class="board" id="b0"></div>
+    <div class="weeksum" id="s0"></div>
+  </section>
+
+  <section aria-labelledby="w1-h">
+    <div class="sec-head"><h2 id="w1-h">Next week<span class="tag">roster</span> <small id="r1"></small></h2></div>
+    <div class="board" id="b1"></div>
+    <div class="weeksum" id="s1"></div>
+  </section>
+
+  <section class="plan" aria-labelledby="w2-h">
+    <div class="sec-head">
+      <h2 id="w2-h">Planning<span class="tag">what FamilyMart can give</span> <small id="r2"></small></h2>
+      <div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="clearPlan" type="button">Clear planning week</button>
+        <button class="btn" id="resetAll" type="button">Reset to real roster</button>
+      </div>
+    </div>
+    <div class="answer">
+      <div class="big" id="bigNum">0h</div>
+      <p id="answerText"></p>
+    </div>
+    <div class="alert" id="alert" hidden></div>
+    <div class="legend"><span><i style="background:var(--room)"></i>Ceiling</span><span><i style="background:var(--konbini)"></i>FamilyMart used so far</span><span><i style="background:var(--room-soft);outline:1px solid var(--room)"></i>Left</span></div>
+    <div class="chartbox"><svg id="chart" viewBox="0 0 700 250" width="100%" role="img" aria-label="Ceiling staircase and FamilyMart running total for the planning week"></svg></div>
+    <p class="hint">The blue staircase is the most FamilyMart can have in total by each day. The green line is the running total of shifts you set below. The gap is what is left. Lift a handle to try a shift.</p>
+    <div class="board" id="b2"></div>
+    <div class="weeksum" id="s2"></div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Day</th><th>Earlier days still counted</th><th>FamilyMart set</th><th>HSTEC set</th><th>Can still add this day</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <label class="switch" for="lock">
+    <input id="lock" type="checkbox" checked>
+    <span class="knob" aria-hidden="true"></span>
+    <span>Stop bars at the limit <small id="lockNote"></small></span>
+  </label>
+</div>
+
+<script>
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MAXH=12, STEP=0.5, N=21;
+const START=new Date('2026-10-05T00:00'), TODAY='2026-10-06';
+// FamilyMart hours from the confirmed rosters (vichet_data.json)
+const PRE=[0,4.5,4.5,6,7,0];                       // 9/29–10/4, counted but not shown
+const REAL_K=[4,0,4,2,5,5,5, 3,0,0,0,5,0,0, 0,0,0,0,0,0,0]; // 10/5–10/25
+const zero=()=>Array(N).fill(0);
+let S={k:[...REAL_K],h:zero(),lock:true};
+try{const s=JSON.parse(localStorage.getItem('nwr-3wk')||'null');if(s&&s.k&&s.k.length===N&&s.h&&s.h.length===N)S=s;}catch(e){}
+const $=id=>document.getElementById(id);
+const fmt=v=>(Math.round(v*10)/10).toString().replace(/\.0$/,'');
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const sum=a=>a.reduce((x,y)=>x+y,0);
+function save(){try{localStorage.setItem('nwr-3wk',JSON.stringify(S));}catch(e){}}
+const dateOf=i=>{const x=new Date(START);x.setDate(x.getDate()+i);return x;};
+const md=i=>{const x=dateOf(i);return (x.getMonth()+1)+'/'+x.getDate();};
+const iso=i=>{const x=dateOf(i);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+
+// hours on day i (i<0 reaches into the counted-only days before 10/5)
+const kAt=i=>i>=0?S.k[i]:(PRE[PRE.length+i]||0);
+const allAt=i=>i>=0?S.k[i]+S.h[i]:(PRE[PRE.length+i]||0);
+const win=(e,f)=>{let t=0;for(let j=e-6;j<=e;j++)t+=f(j);return t;};
+const L=()=>+$('limit').value;
+// how many more hours fit on day i without any 7 days (ending on i..i+6, as far as we can see) going over
+function headroomRaw(i){
+  let r=Infinity;
+  for(let e=i;e<=Math.min(i+6,N-1);e++)r=Math.min(r,L()-win(e,allAt));
+  return r;
+}
+
+const cells=[];
+function cell(kind,arr,i){
+  const el=document.createElement('div');
+  el.className='cell '+kind;
+  el.innerHTML='<div class="val"></div><div class="track" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="'+MAXH+'" aria-label="'+md(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+' hours"><div class="fill"></div><div class="cap"></div><div class="handle"></div></div>';
+  const tr=el.querySelector('.track');
+  const set=v=>{
+    if(S.lock){const cur=arr[i];v=Math.min(v,Math.max(cur,cur+Math.floor(Math.max(0,headroomRaw(i))/STEP)*STEP));}
+    arr[i]=clamp(Math.round(v/STEP)*STEP,0,MAXH);paint();update();
+  };
+  function paint(){
+    const p=(arr[i]/MAXH*100)+'%';
+    el.querySelector('.fill').style.height=p;
+    el.querySelector('.handle').style.bottom=p;
+    const val=el.querySelector('.val');val.textContent=fmt(arr[i])+'h';val.classList.toggle('zero',!arr[i]);
+    tr.setAttribute('aria-valuenow',arr[i]);
+  }
+  el._paint=paint;
+  el._mark=()=>{
+    const mx=Math.max(0,arr[i]+headroomRaw(i)),cap=el.querySelector('.cap');
+    cap.style.bottom=(Math.min(mx,MAXH)/MAXH*100)+'%';
+    cap.classList.toggle('top',mx>=MAXH);
+    cap.dataset.h=fmt(mx);
+    el.classList.toggle('atlimit',arr[i]>=mx);
+    tr.title='Limit for this day: '+fmt(mx)+'h';
+  };
+  tr.addEventListener('keydown',e=>{
+    if(e.key==='ArrowUp'){e.preventDefault();set(arr[i]+STEP);}
+    if(e.key==='ArrowDown'){e.preventDefault();set(arr[i]-STEP);}
+  });
+  // press and drag the handle: up adds, down removes; a plain click does nothing
+  let dragging=false,y0=0,v0=0;
+  const pxPerH=()=>tr.getBoundingClientRect().height/MAXH;
+  tr.addEventListener('pointerdown',e=>{dragging=true;y0=e.clientY;v0=arr[i];tr.setPointerCapture(e.pointerId);});
+  tr.addEventListener('pointermove',e=>{if(dragging)set(v0+(y0-e.clientY)/pxPerH());});
+  const end=()=>{dragging=false;};
+  tr.addEventListener('pointerup',end);tr.addEventListener('pointercancel',end);
+  paint();cells.push(el);
+  return el;
+}
+
+function buildWeek(w){
+  const b=$('b'+w),o=w*7;b.innerHTML='';
+  const corner=document.createElement('div');corner.className='corner';b.appendChild(corner);
+  for(let d=0;d<7;d++){const h=document.createElement('div');h.className='dayhead'+(iso(o+d)===TODAY?' today':'');h.innerHTML='<b>'+DAYS[d]+'</b>'+md(o+d);b.appendChild(h);}
+  [['FamilyMart','k',S.k],['HSTEC','h',S.h]].forEach(([lab,cls,arr])=>{
+    const l=document.createElement('div');l.className='rowlab '+cls;l.textContent=lab;b.appendChild(l);
+    for(let d=0;d<7;d++)b.appendChild(cell(cls,arr,o+d));
+  });
+  const l=document.createElement('div');l.className='rowlab t';l.textContent='Last 7 days';b.appendChild(l);
+  for(let d=0;d<7;d++){const t=document.createElement('div');t.className='tot';t.id='t'+(o+d);b.appendChild(t);}
+  $('r'+w).textContent=md(o)+' – '+md(o+6);
+}
+function build(){cells.length=0;[0,1,2].forEach(buildWeek);update();}
+
+function update(){
+  const lim=L(),capRaw=$('cap').value,cap=capRaw===''?Infinity:+capRaw;
+  // rolling totals under every day
+  const overDays=[];
+  for(let i=0;i<N;i++){const t=win(i,allAt),el=$('t'+i);if(el){el.textContent=fmt(t);el.classList.toggle('bad',t>lim);}if(t>lim)overDays.push(i);}
+  [0,1,2].forEach(w=>{const o=w*7,k=sum(S.k.slice(o,o+7)),h=sum(S.h.slice(o,o+7));
+    $('s'+w).innerHTML='<span>FamilyMart <b>'+fmt(k)+'h</b></span><span>HSTEC <b>'+fmt(h)+'h</b></span><span>Mon–Sun total <b>'+fmt(k+h)+'h</b></span><span style="color:var(--muted)">Bottom row: total of the 7 days ending that day, red if over '+lim+'.</span>';});
+
+  // planning week: how much more FamilyMart fits on each day
+  const P=14,slack=[];
+  for(let d=0;d<7;d++){const e=P+d;slack[d]=Math.min(lim-win(e,allAt),cap-win(e,kAt));}
+  const room=DAYS.map((_,d)=>Math.max(0,Math.min(...slack.slice(d))));
+  let s2=[...slack],more=0;
+  for(let d=0;d<7;d++){const a=Math.max(0,Math.min(...s2.slice(d)));more+=a;for(let e=d;e<7;e++)s2[e]-=a;}
+  $('bigNum').textContent=fmt(more)+'h';
+  const setK=sum(S.k.slice(P)),first=room.findIndex(v=>v>0);
+  $('answerText').innerHTML='more FamilyMart hours fit in '+md(P)+' – '+md(P+6)+(setK?', on top of the <b>'+fmt(setK)+'h</b> you set':'')+'. '+(first>0?'Nothing fits before <b>'+DAYS[first]+' '+md(P+first)+'</b>.':'');
+  const al=$('alert');
+  if(overDays.length){al.hidden=false;al.textContent='Over '+lim+'h in the 7 days ending '+overDays.map(md).join(', ')+'.';}else al.hidden=true;
+  $('tbody').innerHTML=DAYS.map((d,i)=>{const e=P+i;const earlier=win(e,allAt)-sum(S.k.slice(P,e+1))-sum(S.h.slice(P,e+1));
+    return '<tr><td>'+d+' <span style="color:var(--muted)">'+md(e)+'</span></td><td class="num">'+fmt(earlier)+'h</td><td class="num">'+fmt(S.k[e])+'h</td><td class="num">'+fmt(S.h[e])+'h</td><td class="num strong">'+fmt(room[i])+'h</td></tr>';}).join('');
+  let u=0;const used=S.k.slice(P).map(v=>u+=v);
+  chart(room,used,overDays.filter(i=>i>=P).map(i=>i-P));
+  cells.forEach(c=>c._mark());
+  $('lockNote').textContent='(bars cannot go past '+lim+'h in any 7 days)';
+  save();
+}
+
+function chart(room,used,over){
+  const W=700,H=250,pl=40,pr=14,pt=22,pb=36,cw=(W-pl-pr)/7,ih=H-pt-pb;
+  const ceil=used.map((u,d)=>u+room[d]);
+  const top=Math.max(8,...ceil,...used);
+  const step=top>24?8:top>12?4:2,scale=Math.ceil(top/step)*step;
+  const y=v=>pt+ih-(Math.max(0,v)/scale)*ih,x=d=>pl+d*cw;
+  let g='';
+  for(let t=0;t<=scale;t+=step)g+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(t)+'" y2="'+y(t)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(pl-6)+'" y="'+(y(t)+4)+'" text-anchor="end" font-size="11" fill="var(--muted)">'+t+'</text>';
+  for(let d=1;d<7;d++)g+='<line x1="'+x(d)+'" x2="'+x(d)+'" y1="'+pt+'" y2="'+y(0)+'" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
+  for(let d=0;d<7;d++){
+    const x0=x(d),bad=over.includes(d);
+    if(used[d]>0)g+='<rect x="'+x0+'" y="'+y(used[d])+'" width="'+cw+'" height="'+(y(0)-y(used[d]))+'" fill="var(--konbini-soft)"/>';
+    if(room[d]>0)g+='<rect x="'+x0+'" y="'+y(ceil[d])+'" width="'+cw+'" height="'+(y(used[d])-y(ceil[d]))+'" fill="var(--room-soft)"/>';
+    const mid=room[d]>0?(y(ceil[d])+y(used[d]))/2+5:y(used[d])-8;
+    g+='<text x="'+(x0+cw/2)+'" y="'+mid+'" text-anchor="middle" font-size="13" font-weight="700" fill="'+(bad?'var(--bad)':'var(--room)')+'">'+(bad?'over':fmt(room[d])+' left')+'</text>';
+    g+='<text x="'+(x0+cw/2)+'" y="'+(H-20)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+DAYS[d]+'</text>';
+    g+='<text x="'+(x0+cw/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="10" fill="var(--muted)">'+md(14+d)+'</text>';
+  }
+  const path=a=>{let p='M'+x(0)+' '+y(a[0]);for(let d=0;d<7;d++){p+=' L'+x(d+1)+' '+y(a[d]);if(d<6)p+=' L'+x(d+1)+' '+y(a[d+1]);}return p;};
+  g+='<path d="'+path(ceil)+'" fill="none" stroke="var(--room)" stroke-width="2.5"/>';
+  g+='<path d="'+path(used)+'" fill="none" stroke="var(--konbini)" stroke-width="2.5"/>';
+  for(let d=0;d<7;d++)g+='<text x="'+(x(d)+5)+'" y="'+(y(ceil[d])-5)+'" font-size="10" fill="var(--room)">'+fmt(ceil[d])+'</text>';
+  $('chart').innerHTML=g;
+}
+
+$('lock').checked=S.lock!==false;
+$('lock').addEventListener('change',()=>{S.lock=$('lock').checked;update();});
+$('limit').addEventListener('change',update);
+$('cap').addEventListener('input',update);
+$('clearPlan').addEventListener('click',()=>{for(let i=14;i<N;i++){S.k[i]=0;S.h[i]=0;}cells.forEach(c=>c._paint());update();});
+$('resetAll').addEventListener('click',()=>{S.k=[...REAL_K];S.h=zero();build();});
+build();
+</script>
+
+</body>
+</html>
