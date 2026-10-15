@@ -98,6 +98,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,.track:focus-visib
 .weeksum span[style]{background:none;padding:2px 0;flex-basis:100%}
 .weeksum b{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--fg);font-weight:600;margin-left:2px}
 
+/* hours at a glance: big total beside each week title, and a summary list in the header */
+.wtot{margin-left:auto;text-align:right;display:grid;gap:2px}
+.wtot b{font:700 28px/1 var(--num);font-variant-numeric:tabular-nums;color:var(--fg)}
+.wtot b.bad{color:var(--bad)}
+.wtot span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.wtot .k{color:var(--konbini);font-weight:600} .wtot .h{color:var(--hstec);font-weight:600}
+.glance .field b{font:600 17px var(--num);font-variant-numeric:tabular-nums}
+.glance .field span small{display:block;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.glance .field b small{display:block;font:400 12px var(--body);color:var(--muted);text-align:right}
 /* answer */
 .answer{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
 .big{font:700 48px/1 var(--num);font-variant-numeric:tabular-nums;color:var(--room);letter-spacing:-.01em}
@@ -204,6 +213,7 @@ td.strong{font-weight:700;color:var(--room)}
       <p>Your real FamilyMart roster for this week and next, then the week you are planning.</p>
       <p id="rosterInfo">Loading FamilyMart roster…</p>
     </div>
+    <div class="settings glance" id="glance" aria-label="Hours per week"></div>
     <div class="settings">
       <label class="field" for="limit">Limit (any 7 days)
         <select id="limit"><option value="28">28h · semester</option><option value="40">40h · long break</option></select>
@@ -225,14 +235,14 @@ td.strong{font-weight:700;color:var(--room)}
   </header>
 
   <section aria-labelledby="w0-h">
-    <div class="sec-head"><h2 id="w0-h">This week<span class="tag">Roster</span> <small id="r0"></small></h2></div>
+    <div class="sec-head"><h2 id="w0-h">This week<span class="tag">Roster</span> <small id="r0"></small></h2><div class="wtot" id="wt0"></div></div>
     <div class="board" id="b0"></div>
     <div class="limitnote" id="n0" hidden></div>
     <div class="weeksum" id="s0"></div>
   </section>
 
   <section aria-labelledby="w1-h">
-    <div class="sec-head"><h2 id="w1-h">Next week<span class="tag">Roster</span> <small id="r1"></small></h2></div>
+    <div class="sec-head"><h2 id="w1-h">Next week<span class="tag">Roster</span> <small id="r1"></small></h2><div class="wtot" id="wt1"></div></div>
     <div class="board" id="b1"></div>
     <div class="limitnote" id="n1" hidden></div>
     <div class="weeksum" id="s1"></div>
@@ -241,6 +251,7 @@ td.strong{font-weight:700;color:var(--room)}
   <section class="plan" aria-labelledby="w2-h">
     <div class="sec-head">
       <h2 id="w2-h">Planning<span class="tag">What FamilyMart can give</span> <small id="r2"></small></h2>
+      <div class="wtot" id="wt2"></div>
       <div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="clearPlan" type="button">Clear planning week</button>
         <button class="btn" id="resetAll" type="button">Reset FamilyMart to roster</button>
@@ -379,8 +390,13 @@ function update(){
   // rolling totals under every day
   const overDays=[];
   for(let i=0;i<N;i++){const t=win(i,allAt),el=$('t'+i);if(el){el.textContent=fmt(t);el.classList.toggle('bad',t>lim);}if(t>lim)overDays.push(i);}
+  const names=['This week','Next week','Planning'];let gl='';
   [0,1,2].forEach(w=>{const o=w*7,k=sumAt(kAt,o,o+7),h=sumAt(hAt,o,o+7);
+    let peak=0;for(let e=o;e<o+7;e++)peak=Math.max(peak,win(e,allAt));const bad=peak>lim?' bad':'';
+    $('wt'+w).innerHTML='<b class="'+bad.trim()+'">'+fmt(k+h)+'h</b><span><span class="k">FamilyMart '+fmt(k)+'</span> · <span class="h">HSTEC '+fmt(h)+'</span></span>';
+    gl+='<div class="field"><span>'+names[w]+'<small>'+md(o)+' – '+md(o+6)+'</small></span><b class="'+bad.trim()+'" style="'+(bad?'color:var(--bad)':'')+'">'+fmt(k+h)+'h<small>FM '+fmt(k)+' · HSTEC '+fmt(h)+'</small></b></div>';
     $('s'+w).innerHTML='<span>FamilyMart <b>'+fmt(k)+'h</b></span><span>HSTEC <b>'+fmt(h)+'h</b></span><span>Mon–Sun total <b>'+fmt(k+h)+'h</b></span><span style="color:var(--muted)">Bottom row: total of the 7 days ending that day, red if over '+lim+'.</span>';});
+  $('glance').innerHTML=gl;
 
   // planning week: how much more FamilyMart fits on each day
   const P=14,slack=[];
