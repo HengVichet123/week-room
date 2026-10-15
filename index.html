@@ -11,7 +11,8 @@
 <title>Next Week Room</title>
 <style>
 /* iOS look: grouped background, inset cards, system font, system colours.
-   Layout: three stacked weeks on one timeline: this week, next week (real rosters), then the week you plan */
+   Layout: three stacked weeks from the real date: this week, next week (roster), then the week you plan.
+   FamilyMart hours come from roster.json; HSTEC and any hand edits are saved per date in this browser */
 :root{
   --bg:#f2f2f7; --panel:#ffffff; --fill:#e9e9ee; --fg:#000000; --muted:#6c6c70; --line:#c6c6c8;
   --konbini:#248a3d; --konbini-soft:#d8f2de;
@@ -201,6 +202,7 @@ td.strong{font-weight:700;color:var(--room)}
     <div>
       <h1>Next Week Room</h1>
       <p>Your real FamilyMart roster for this week and next, then the week you are planning.</p>
+      <p id="rosterInfo">Loading FamilyMart roster…</p>
     </div>
     <div class="settings">
       <label class="field" for="limit">Limit (any 7 days)
@@ -241,7 +243,7 @@ td.strong{font-weight:700;color:var(--room)}
       <h2 id="w2-h">Planning<span class="tag">What FamilyMart can give</span> <small id="r2"></small></h2>
       <div class="btns" style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="clearPlan" type="button">Clear planning week</button>
-        <button class="btn" id="resetAll" type="button">Reset to real roster</button>
+        <button class="btn" id="resetAll" type="button">Reset FamilyMart to roster</button>
       </div>
     </div>
     <div class="answer">
@@ -267,26 +269,34 @@ td.strong{font-weight:700;color:var(--room)}
 <script>
 const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const MAXH=12, STEP=0.5, N=21;
-const START=new Date('2026-10-05T00:00'), TODAY='2026-10-06';
-// FamilyMart hours from the confirmed rosters (vichet_data.json)
-const PRE=[0,4.5,4.5,6,7,0];                       // 9/29–10/4, counted but not shown
-const REAL_K=[4,0,4,2,5,5,5, 3,0,0,0,5,0,0, 0,0,0,0,0,0,0]; // 10/5–10/25
-const zero=()=>Array(N).fill(0);
-let S={k:[...REAL_K],h:zero(),lock:true};
-try{const s=JSON.parse(localStorage.getItem('nwr-3wk')||'null');if(s&&s.k&&s.k.length===N&&s.h&&s.h.length===N)S=s;}catch(e){}
+// weeks follow the real date: this week starts on the Monday of today
+const pad=n=>String(n).padStart(2,'0');
+const isoD=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const NOW=new Date(), TODAY=isoD(NOW);
+const START=new Date(NOW.getFullYear(),NOW.getMonth(),NOW.getDate());
+START.setDate(START.getDate()-(START.getDay()+6)%7);
+// R = roster.json (FamilyMart shifts, filled from Google Calendar or a pasted schedule)
+// S = what you set on this device, keyed by date so it stays when the weeks move on
+let R={familymart:{},hstec:{}};
+let S={k:{},h:{},lock:true,lockK:true};
+try{const s=JSON.parse(localStorage.getItem('week-room-v2')||'null');if(s&&s.k&&s.h)S=s;}catch(e){}
+// one-time move of HSTEC hours from the old fixed 10/5 – 10/25 layout
+try{const o=JSON.parse(localStorage.getItem('nwr-3wk')||'null');
+  if(o&&o.h&&!localStorage.getItem('week-room-v2')){o.h.forEach((v,i)=>{if(v){const d=new Date(2026,9,5+i);S.h[isoD(d)]=v;}});S.lock=o.lock!==false;S.lockK=o.lockK!==false;}}catch(e){}
 const $=id=>document.getElementById(id);
 const fmt=v=>(Math.round(v*10)/10).toString().replace(/\.0$/,'');
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-const sum=a=>a.reduce((x,y)=>x+y,0);
-function save(){try{localStorage.setItem('nwr-3wk',JSON.stringify(S));}catch(e){}}
+function save(){try{localStorage.setItem('week-room-v2',JSON.stringify(S));}catch(e){}}
 const dateOf=i=>{const x=new Date(START);x.setDate(x.getDate()+i);return x;};
 const md=i=>{const x=dateOf(i);return (x.getMonth()+1)+'/'+x.getDate();};
-const iso=i=>{const x=dateOf(i);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+const iso=i=>isoD(dateOf(i));
 
-// hours on day i (i<0 reaches into the counted-only days before 10/5)
-const kAt=i=>i>=0?S.k[i]:(PRE[PRE.length+i]||0);
-const allAt=i=>i>=0?S.k[i]+S.h[i]:(PRE[PRE.length+i]||0);
-const win=(e,f)=>{let t=0;for(let j=e-6;j<=e;j++)t+=f(j);return t;};
+// hours on day i (i<0 reaches into the days before this week, which still count)
+const kAt=i=>{const d=iso(i);return d in S.k?S.k[d]:(R.familymart[d]||0);};
+const hAt=i=>{const d=iso(i);return d in S.h?S.h[d]:(R.hstec[d]||0);};
+const allAt=i=>kAt(i)+hAt(i);
+const sumAt=(f,a,b)=>{let t=0;for(let i=a;i<b;i++)t+=f(i);return t;};
+const win=(e,f)=>sumAt(f,e-6,e+1);
 const L=()=>+$('limit').value;
 // how many more hours fit on day i without any 7 days (ending on i..i+6, as far as we can see) going over
 function headroomRaw(i){
@@ -297,41 +307,45 @@ function headroomRaw(i){
 
 const cells=[];
 let touched=null; // last knob moved, for the "why it stopped" note
-function cell(kind,arr,i){
+function cell(kind,i){
+  const get=()=>kind==='k'?kAt(i):hAt(i);
+  const put=v=>{const d=iso(i);
+    if(kind==='k'){if(v===(R.familymart[d]||0))delete S.k[d];else S.k[d]=v;}
+    else{if(v===(R.hstec[d]||0))delete S.h[d];else S.h[d]=v;}};
   const el=document.createElement('div');
   el.className='cell '+kind;
   el.innerHTML='<div class="val"></div><div class="track" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="'+MAXH+'" aria-label="'+md(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+' hours"><div class="fill"></div><div class="cap"></div><div class="handle"></div></div>';
   const tr=el.querySelector('.track');
   const set=v=>{
-    if(S.lock){const cur=arr[i];v=Math.min(v,Math.max(cur,cur+Math.floor(Math.max(0,headroomRaw(i))/STEP)*STEP));}
-    arr[i]=clamp(Math.round(v/STEP)*STEP,0,MAXH);touched={kind,arr,i};paint();update();
+    if(S.lock){const cur=get();v=Math.min(v,Math.max(cur,cur+Math.floor(Math.max(0,headroomRaw(i))/STEP)*STEP));}
+    put(clamp(Math.round(v/STEP)*STEP,0,MAXH));touched={kind,i,get};paint();update();
   };
   function paint(){
-    const p=(arr[i]/MAXH*100)+'%';
+    const v=get(),p=(v/MAXH*100)+'%';
     el.querySelector('.fill').style.height=p;
     el.querySelector('.handle').style.bottom=p;
-    const val=el.querySelector('.val');val.textContent=fmt(arr[i])+'h';val.classList.toggle('zero',!arr[i]);
-    tr.setAttribute('aria-valuenow',arr[i]);
+    const val=el.querySelector('.val');val.textContent=fmt(v)+'h';val.classList.toggle('zero',!v);
+    tr.setAttribute('aria-valuenow',v);
   }
   el._paint=paint;
   el._mark=()=>{
-    const mx=Math.max(0,arr[i]+headroomRaw(i)),cap=el.querySelector('.cap');
+    const v=get(),mx=Math.max(0,v+headroomRaw(i)),cap=el.querySelector('.cap');
     cap.style.bottom=(Math.min(mx,MAXH)/MAXH*100)+'%';
     cap.classList.toggle('top',mx>=MAXH);
     cap.dataset.h=fmt(mx);
-    el.classList.toggle('atlimit',arr[i]>=mx);
+    el.classList.toggle('atlimit',v>=mx);
     tr.title='Limit for this day: '+fmt(mx)+'h';
   };
   const ro=()=>kind==='k'&&S.lockK!==false;
   tr.addEventListener('keydown',e=>{
     if(ro())return;
-    if(e.key==='ArrowUp'){e.preventDefault();set(arr[i]+STEP);}
-    if(e.key==='ArrowDown'){e.preventDefault();set(arr[i]-STEP);}
+    if(e.key==='ArrowUp'){e.preventDefault();set(get()+STEP);}
+    if(e.key==='ArrowDown'){e.preventDefault();set(get()-STEP);}
   });
   // press and drag the handle: up adds, down removes; a plain click does nothing
   let dragging=false,y0=0,v0=0;
   const pxPerH=()=>tr.getBoundingClientRect().height/MAXH;
-  tr.addEventListener('pointerdown',e=>{if(ro())return;dragging=true;y0=e.clientY;v0=arr[i];tr.setPointerCapture(e.pointerId);});
+  tr.addEventListener('pointerdown',e=>{if(ro())return;dragging=true;y0=e.clientY;v0=get();tr.setPointerCapture(e.pointerId);});
   tr.addEventListener('pointermove',e=>{if(dragging)set(v0+(y0-e.clientY)/pxPerH());});
   const end=()=>{dragging=false;};
   tr.addEventListener('pointerup',end);tr.addEventListener('pointercancel',end);
@@ -343,9 +357,9 @@ function buildWeek(w){
   const b=$('b'+w),o=w*7;b.innerHTML='';
   const corner=document.createElement('div');corner.className='corner';b.appendChild(corner);
   for(let d=0;d<7;d++){const h=document.createElement('div');h.className='dayhead'+(iso(o+d)===TODAY?' today':'');h.innerHTML='<b>'+DAYS[d]+'</b>'+md(o+d);b.appendChild(h);}
-  [['FamilyMart','k',S.k],['HSTEC','h',S.h]].forEach(([lab,cls,arr])=>{
+  [['FamilyMart','k'],['HSTEC','h']].forEach(([lab,cls])=>{
     const l=document.createElement('div');l.className='rowlab '+cls;l.textContent=lab;b.appendChild(l);
-    for(let d=0;d<7;d++)b.appendChild(cell(cls,arr,o+d));
+    for(let d=0;d<7;d++)b.appendChild(cell(cls,o+d));
   });
   const l=document.createElement('div');l.className='rowlab t';l.textContent='Last 7 days';b.appendChild(l);
   for(let d=0;d<7;d++){const t=document.createElement('div');t.className='tot';t.id='t'+(o+d);b.appendChild(t);}
@@ -353,12 +367,19 @@ function buildWeek(w){
 }
 function build(){cells.length=0;[0,1,2].forEach(buildWeek);update();}
 
+function rosterInfo(){
+  const days=Object.keys(R.familymart).filter(d=>R.familymart[d]>0).sort(),last=days[days.length-1];
+  const nice=s=>{const [y,m,d]=s.split('-').map(Number);return WD[new Date(y,m-1,d).getDay()]+' '+m+'/'+d;};
+  if(!last){$('rosterInfo').textContent='No FamilyMart roster loaded yet.';return;}
+  $('rosterInfo').textContent='FamilyMart roster updated '+(R.updated?nice(R.updated):'?')+(R.source?' from '+R.source:'')+'. Last shift on file: '+nice(last)+'. Days after that show 0h until the next roster comes in.';
+}
+
 function update(){
   const lim=L(),capRaw=$('cap').value,cap=capRaw===''?Infinity:+capRaw;
   // rolling totals under every day
   const overDays=[];
   for(let i=0;i<N;i++){const t=win(i,allAt),el=$('t'+i);if(el){el.textContent=fmt(t);el.classList.toggle('bad',t>lim);}if(t>lim)overDays.push(i);}
-  [0,1,2].forEach(w=>{const o=w*7,k=sum(S.k.slice(o,o+7)),h=sum(S.h.slice(o,o+7));
+  [0,1,2].forEach(w=>{const o=w*7,k=sumAt(kAt,o,o+7),h=sumAt(hAt,o,o+7);
     $('s'+w).innerHTML='<span>FamilyMart <b>'+fmt(k)+'h</b></span><span>HSTEC <b>'+fmt(h)+'h</b></span><span>Mon–Sun total <b>'+fmt(k+h)+'h</b></span><span style="color:var(--muted)">Bottom row: total of the 7 days ending that day, red if over '+lim+'.</span>';});
 
   // planning week: how much more FamilyMart fits on each day
@@ -368,13 +389,13 @@ function update(){
   let s2=[...slack],more=0;
   for(let d=0;d<7;d++){const a=Math.max(0,Math.min(...s2.slice(d)));more+=a;for(let e=d;e<7;e++)s2[e]-=a;}
   $('bigNum').textContent=fmt(more)+'h';
-  const setK=sum(S.k.slice(P)),first=room.findIndex(v=>v>0);
+  const setK=sumAt(kAt,P,P+7),first=room.findIndex(v=>v>0);
   $('answerText').innerHTML='more FamilyMart hours fit in '+md(P)+' – '+md(P+6)+(setK?', on top of the <b>'+fmt(setK)+'h</b> you set':'')+'. '+(first>0?'Nothing fits before <b>'+DAYS[first]+' '+md(P+first)+'</b>.':'');
   const al=$('alert');
   if(overDays.length){al.hidden=false;al.textContent='Over '+lim+'h: '+overDays.map(e=>md(e-6)+' – '+md(e)+' = '+fmt(win(e,allAt))+'h').join(', ')+'.';}else al.hidden=true;
-  $('tbody').innerHTML=DAYS.map((d,i)=>{const e=P+i;const earlier=win(e,allAt)-sum(S.k.slice(P,e+1))-sum(S.h.slice(P,e+1));
-    return '<tr><td>'+d+' <span style="color:var(--muted)">'+md(e)+'</span></td><td class="num">'+fmt(earlier)+'h</td><td class="num">'+fmt(S.k[e])+'h</td><td class="num">'+fmt(S.h[e])+'h</td><td class="num strong">'+fmt(room[i])+'h</td></tr>';}).join('');
-  let u=0;const used=S.k.slice(P).map(v=>u+=v);
+  $('tbody').innerHTML=DAYS.map((d,i)=>{const e=P+i;const earlier=win(e,allAt)-sumAt(allAt,P,e+1);
+    return '<tr><td>'+d+' <span style="color:var(--muted)">'+md(e)+'</span></td><td class="num">'+fmt(earlier)+'h</td><td class="num">'+fmt(kAt(e))+'h</td><td class="num">'+fmt(hAt(e))+'h</td><td class="num strong">'+fmt(room[i])+'h</td></tr>';}).join('');
+  let u=0;const used=[0,1,2,3,4,5,6].map(d=>u+=kAt(P+d));
   chart(room,used,overDays.filter(i=>i>=P).map(i=>i-P));
   cells.forEach(c=>c._mark());
   explain(lim,overDays);
@@ -401,12 +422,12 @@ function explain(lim,overDays){
     notes[Math.floor(g[g.length-1]/7)].push('<div class="over">'+head+'<span class="sub">FamilyMart '+fmt(x.k)+'h + HSTEC '+fmt(x.h)+'h. '+fix+'</span></div>');
   });
   if(touched&&!overDays.length){
-    const {kind,arr,i}=touched,mx=Math.max(0,arr[i]+headroomRaw(i));
-    if(arr[i]>0&&arr[i]>=mx){
+    const {kind,i,get}=touched,v=get(),mx=Math.max(0,v+headroomRaw(i));
+    if(v>0&&v>=mx){
       let be=i,best=Infinity;
       for(let e=i;e<=Math.min(i+6,N-1);e++){const r=lim-win(e,allAt);if(r<best){best=r;be=e;}}
       const x=split(be);
-      notes[Math.floor(i/7)].push('<div><b>'+dname(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+'</b> stopped at <b>'+fmt(arr[i])+'h</b>: '+
+      notes[Math.floor(i/7)].push('<div><b>'+dname(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+'</b> stopped at <b>'+fmt(v)+'h</b>: '+
         '<b>'+dname(be-6)+' – '+dname(be)+'</b> is full at '+lim+'h.'+
         '<span class="sub">That stretch has FamilyMart '+fmt(x.k)+'h + HSTEC '+fmt(x.h)+'h = '+fmt(x.t)+'h.</span></div>');
     }
@@ -446,9 +467,12 @@ $('lockK').addEventListener('change',()=>{S.lockK=$('lockK').checked;applyLockK(
 $('lock').addEventListener('change',()=>{S.lock=$('lock').checked;update();});
 $('limit').addEventListener('change',update);
 $('cap').addEventListener('input',update);
-$('clearPlan').addEventListener('click',()=>{for(let i=14;i<N;i++){S.k[i]=0;S.h[i]=0;}cells.forEach(c=>c._paint());update();});
-$('resetAll').addEventListener('click',()=>{S.k=[...REAL_K];S.h=zero();build();applyLockK();});
+$('clearPlan').addEventListener('click',()=>{for(let i=14;i<N;i++){S.h[iso(i)]=0;delete S.k[iso(i)];}cells.forEach(c=>c._paint());update();});
+$('resetAll').addEventListener('click',()=>{S.k={};build();applyLockK();});
 build();applyLockK();
+// FamilyMart roster lives in roster.json next to this page; rebuild once it arrives
+fetch('roster.json',{cache:'no-store'}).then(r=>r.json()).then(j=>{R={familymart:{},hstec:{},...j};rosterInfo();build();applyLockK();})
+  .catch(()=>{$('rosterInfo').textContent='Could not load roster.json, so FamilyMart shows 0h. Your HSTEC hours are still here.';});
 </script>
 
 </body>
