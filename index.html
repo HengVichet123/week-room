@@ -89,6 +89,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,.track:focus-visib
 .cell .cap.top{display:none}
 .cell.atlimit .handle{box-shadow:0 0 0 2.5px var(--bad),0 3px 8px rgba(0,0,0,.15)}
 .cell .track:active .handle{transform:translate(-50%,50%) scale(1.15)}
+/* live readout while dragging: sits above the finger so it stays visible */
+.cell .bubble{display:none;position:absolute;left:50%;transform:translate(var(--bx,-50%),-58px);z-index:5;pointer-events:none;
+  background:var(--fg);color:var(--bg);border-radius:12px;padding:6px 10px;text-align:center;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.cell .bubble b{display:block;font:700 24px/1.1 var(--num);font-variant-numeric:tabular-nums;color:var(--ink)}
+.cell .bubble small{display:block;font:500 12px/1.3 var(--num);font-variant-numeric:tabular-nums;opacity:.8}
+.cell .bubble small.bad{color:var(--bad);opacity:1;font-weight:700}
+.cell.dragging .bubble{display:block}
 .cell.k{--ink:var(--konbini)}
 .cell.h{--ink:var(--hstec)}
 .tot{text-align:center;font:400 15px var(--num);font-variant-numeric:tabular-nums;color:var(--muted)}
@@ -325,8 +332,9 @@ function cell(kind,i){
     else{if(v===(R.hstec[d]||0))delete S.h[d];else S.h[d]=v;}};
   const el=document.createElement('div');
   el.className='cell '+kind;
-  el.innerHTML='<div class="val"></div><div class="track" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="'+MAXH+'" aria-label="'+md(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+' hours"><div class="fill"></div><div class="cap"></div><div class="handle"></div></div>';
-  const tr=el.querySelector('.track');
+  el.innerHTML='<div class="val"></div><div class="track" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="'+MAXH+'" aria-label="'+md(i)+' '+(kind==='k'?'FamilyMart':'HSTEC')+' hours"><div class="fill"></div><div class="cap"></div><div class="handle"></div><div class="bubble"></div></div>';
+  const tr=el.querySelector('.track'),dow=((i%7)+7)%7;
+  el.querySelector('.bubble').style.setProperty('--bx',dow===0?'-22%':dow===6?'-78%':'-50%');
   const set=v=>{
     if(S.lock){const cur=get();v=Math.min(v,Math.max(cur,cur+Math.floor(Math.max(0,headroomRaw(i))/STEP)*STEP));}
     put(clamp(Math.round(v/STEP)*STEP,0,MAXH));touched={kind,i,get};paint();update();
@@ -337,7 +345,11 @@ function cell(kind,i){
     el.querySelector('.handle').style.bottom=p;
     const val=el.querySelector('.val');val.textContent=fmt(v)+'h';val.classList.toggle('zero',!v);
     tr.setAttribute('aria-valuenow',v);
+    if(dragging){const o=i-dow,wk=sumAt(allAt,o,o+7),r=win(i,allAt),bub=el.querySelector('.bubble');
+      bub.style.bottom=p;
+      bub.innerHTML='<b>'+fmt(v)+'h</b><small>Week '+fmt(wk)+'h</small><small'+(r>L()?' class="bad"':'')+'>7 days '+fmt(r)+'/'+L()+'</small>';}
   }
+  let dragging=false,y0=0,v0=0;
   el._paint=paint;
   el._mark=()=>{
     const v=get(),mx=Math.max(0,v+headroomRaw(i)),cap=el.querySelector('.cap');
@@ -354,11 +366,10 @@ function cell(kind,i){
     if(e.key==='ArrowDown'){e.preventDefault();set(get()-STEP);}
   });
   // press and drag the handle: up adds, down removes; a plain click does nothing
-  let dragging=false,y0=0,v0=0;
-  const pxPerH=()=>tr.getBoundingClientRect().height/MAXH;
-  tr.addEventListener('pointerdown',e=>{if(ro())return;dragging=true;y0=e.clientY;v0=get();tr.setPointerCapture(e.pointerId);});
+    const pxPerH=()=>tr.getBoundingClientRect().height/MAXH;
+  tr.addEventListener('pointerdown',e=>{if(ro())return;dragging=true;el.classList.add('dragging');y0=e.clientY;v0=get();tr.setPointerCapture(e.pointerId);paint();});
   tr.addEventListener('pointermove',e=>{if(dragging)set(v0+(y0-e.clientY)/pxPerH());});
-  const end=()=>{dragging=false;};
+  const end=()=>{dragging=false;el.classList.remove('dragging');};
   tr.addEventListener('pointerup',end);tr.addEventListener('pointercancel',end);
   paint();cells.push(el);
   return el;
